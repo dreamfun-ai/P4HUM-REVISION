@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>哥哥妹妹溫習遊戲</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Revision Game Portal</p>
+      <h1>哥哥妹妹溫習遊戲</h1>
+      <p class="subtitle">選擇使用者後進入單元；每位小朋友、每個單元的進度會分開記錄。</p>
+    </div>
+    <div class="userBox" aria-label="使用者選擇">
+      <span>目前使用者</span>
+      <div class="segmented">
+        <button id="brotherBtn" type="button" data-user="childA">哥哥</button>
+        <button id="sisterBtn" type="button" data-user="childB">妹妹</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="portal">
+    <section class="sectionBlock" id="brotherSection">
+      <div class="sectionTitle">
+        <h2>哥哥的溫習</h2>
+        <p>目前已加入小六常識科第 4 冊單元 1、第 5 冊單元 1、單元 2，以及第 6 冊單元 2，之後可加入其他冊數及單元。</p>
+      </div>
+      <div class="cards">
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17-b4u1 圖片版</div>
+          <h3>小六常識科｜第 4 冊｜單元 1｜《基本法》與我</h3>
+          <p>圖片版 PDF 題目 + 紅字遮罩 + 正確答題方式。</p>
+          <div class="progress" id="brotherGsB4U1Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/brother-p6-gs-b4-u1-v17img/index.html" data-set-user="childA">開始 / 繼續</a></div>
+        </article>
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17-brother 圖片版</div>
+          <h3>小六常識科｜第 5 冊｜單元 1｜生物多樣性</h3>
+          <p>圖片版 PDF 題目 + 紅字遮罩 + 正確答題方式。</p>
+          <div class="progress" id="brotherGsB5U1Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/brother-p6-gs-b5-u1-v17img/index.html" data-set-user="childA">開始 / 繼續</a></div>
+        </article>
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17-b5u2 圖片版</div>
+          <h3>小六常識科｜第 5 冊｜單元 2｜大自然的平衡</h3>
+          <p>圖片版 PDF 題目 + 紅字遮罩 + 正確答題方式。</p>
+          <div class="progress" id="brotherGsB5U2Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/brother-p6-gs-b5-u2-v17img/index.html" data-set-user="childA">開始 / 繼續</a></div>
+        </article>
+        <article class="unitCard coming"><div class="tag">準備中</div><h3>小六常識科｜第 6 冊｜單元 1</h3><p>等待 PDF 加入後開放。</p></article>
+        
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17-b6u2 圖片版</div>
+          <h3>小六常識科｜第 6 冊｜單元 2｜住在地球村</h3>
+          <p>圖片版 PDF 題目 + 紅字遮罩 + 正確答題方式。</p>
+          <div class="progress" id="brotherGsB6U2Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/brother-p6-gs-b6-u2-v17img/index.html" data-set-user="childA">開始 / 繼續</a></div>
+        </article>
+        <article class="unitCard coming dashed"><div class="tag">可新增</div><h3>其他 PDF</h3><p>未確定單元可之後再加，不影響現有進度。</p></article>
+      </div>
+    </section>
+
+    <section class="sectionBlock" id="sisterSection">
+      <div class="sectionTitle">
+        <h2>妹妹的溫習</h2>
+        <p>目前開放小四人民科單元 6、單元 7、單元 8，以及小四科學科單元 6、單元 7。</p>
+      </div>
+
+      <h3 class="subjectTitle">小四人民科</h3>
+      <div class="cards">
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17</div>
+          <h3>單元 6｜香港今昔</h3>
+          <p>v17 正式版：正確答題方式 + 精準紅字遮罩 + 未答完不可提交。</p>
+          <div class="progress" id="humU6Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/sister-p4-hum-u6-v17/index.html" data-set-user="childB">開始 / 繼續</a></div>
+        </article>
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17-u7 圖片版</div>
+          <h3>單元 7｜《基本法》與我</h3>
+          <p>沿用單元 6 成功模板：圖片版 PDF 題目 + 紅字遮罩 + 正確答題方式。</p>
+          <div class="progress" id="humU7Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/sister-p4-hum-u7-v17img/index.html" data-set-user="childB">開始 / 繼續</a></div>
+        </article>
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17-u8 圖片版</div>
+          <h3>單元 8｜資訊新世代</h3>
+          <p>沿用成功 v17 模板：圖片版 PDF 題目 + 紅字遮罩 + 正確答題方式。</p>
+          <div class="progress" id="humU8Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/sister-p4-hum-u8-v17img/index.html" data-set-user="childB">開始 / 繼續</a></div>
+        </article>
+      </div>
+
+      <h3 class="subjectTitle">小四科學科</h3>
+      <div class="cards">
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17-sci6 圖片版</div>
+          <h3>單元 6｜能源和電</h3>
+          <p>沿用成功 v17 模板：圖片版 PDF 題目 + 紅字遮罩 + 正確答題方式。</p>
+          <div class="progress" id="sciU6Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/sister-p4-sci-u6-v17img/index.html" data-set-user="childB">開始 / 繼續</a></div>
+        </article>
+        <article class="unitCard available">
+          <div class="tag live">正式版 v17-sci7 圖片版</div>
+          <h3>單元 7｜物質的特性和變化</h3>
+          <p>沿用成功 v17 模板：圖片版 PDF 題目 + 紅字遮罩 + 正確答題方式。</p>
+          <div class="progress" id="sciU7Progress">讀取進度中……</div>
+          <div class="cardActions"><a class="primaryLink" href="units/sister-p4-sci-u7-v17img/index.html" data-set-user="childB">開始 / 繼續</a></div>
+        </article>
+        <article class="unitCard coming"><div class="tag">準備中</div><h3>單元 8</h3><p>等待 PDF 加入後開放。</p></article>
+        <article class="unitCard coming"><div class="tag">準備中</div><h3>單元 9</h3><p>等待 PDF 加入後開放。</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer><p>提示：把網站加入 iPad 主畫面後，打開會像 App 一樣；進度儲存在各自 iPad 的 Safari 裏。</p></footer>
+  <script src="main.js"></script>
+</body>
+</html>
