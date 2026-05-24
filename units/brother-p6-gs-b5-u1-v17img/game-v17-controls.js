@@ -1,12 +1,34 @@
 const PAGES = window.PAGE_DATA;
 let zoomMode = localStorage.getItem('brother_p6_gs_b5_u1_zoom') || 'fit';
 let pdfHeightMode = localStorage.getItem('brother_p6_gs_b5_u1_pdf_height') || 'medium';
-let user = localStorage.getItem('revision_portal_current_user') || 'sister';
+function canonicalUser(u){
+  if(u === 'childA') return 'brother';
+  if(u === 'childB') return 'sister';
+  return (u === 'brother' || u === 'sister') ? u : 'sister';
+}
+let user = canonicalUser(localStorage.getItem('revision_portal_current_user') || 'sister');
+localStorage.setItem('revision_portal_current_user', user);
 let idx = 0, view = 'all', typeFilter = 'all';
 const $ = id => document.getElementById(id);
 function key(){ return 'progress_brother_p6_gs_b5_u1_' + user; }
 function load(){ try{return JSON.parse(localStorage.getItem(key())||'{}')}catch(e){return{}} }
 function save(p){ localStorage.setItem(key(), JSON.stringify(p)); }
+function progressPrefix(){ return key().slice(0, -user.length); }
+function mergeProgress(a,b){ return {...(a||{}), ...(b||{}), last:(b&&b.last)||(a&&a.last)}; }
+function migrateLegacyProgress(){
+  const prefix=progressPrefix();
+  const oldUser = user === 'brother' ? 'childA' : user === 'sister' ? 'childB' : null;
+  if(!oldUser) return;
+  const oldKey=prefix+oldUser, newKey=prefix+user;
+  const oldVal=localStorage.getItem(oldKey);
+  if(!oldVal) return;
+  try{
+    const oldObj=JSON.parse(oldVal||'{}');
+    const newObj=JSON.parse(localStorage.getItem(newKey)||'{}');
+    localStorage.setItem(newKey, JSON.stringify(mergeProgress(oldObj,newObj)));
+  }catch(e){}
+}
+migrateLegacyProgress();
 function pageId(pg){ return 'page_' + pg.page; }
 function getState(pg){ return load()[pageId(pg)] || {}; }
 function setState(pg,s){ let p=load(); p[pageId(pg)]={...(p[pageId(pg)]||{}),...s,ts:new Date().toISOString()}; p.last=pageId(pg); save(p); }
@@ -18,7 +40,7 @@ function current(){ let arr=currentArray(); if(idx>=arr.length) idx=0; return ar
 function initTypes(){ let types=['all',...new Set(PAGES.map(p=>p.typeLabel).filter(Boolean))]; $('typeFilter').innerHTML=types.map(t=>`<option value="${t}">${t==='all'?'全部題型':t}</option>`).join(''); }
 function shortType(t){ return (t||'').replace('題','').replace('看圖','圖'); }
 function renderGrid(){ let p=load(), arr=currentArray(), active=activePages(), done=active.filter(pg=>p[pageId(pg)]).length, wrong=active.filter(pg=>p[pageId(pg)]?.correct===false).length; $('stats').innerHTML=`全部 ${PAGES.length} 頁｜需作答 ${active.length} 頁｜已做 ${done} 頁｜錯題 ${wrong} 頁`; $('grid').innerHTML=arr.map((pg,i)=>{ let s=p[pageId(pg)], cls=!pg.exercises?.length?'skip':(s?(s.correct===true?'ok':s.correct===false?'bad':'open'):''), mark=!pg.exercises?.length?'—':(s?(s.correct===true?'✅':s.correct===false?'❌':'✍️'):'⬜'); return `<button class="qcell ${cls} ${i===idx?'active':''}" onclick="idx=${i};render()">${mark}<br>P${pg.page}<br>${shortType(pg.typeLabel)}</button>` }).join(''); }
-function render(){ applyZoom(); let pg=current(); $('qTitle').textContent=`PDF 第 ${pg.page} 頁`; $('qMeta').textContent=`${pg.typeLabel||'其他頁'}｜本頁 ${pg.exercises?.length||0} 題`; $('pageImg').src=`pages/page-${String(pg.page).padStart(3,'0')}.jpg`; $('pageImg').onload=()=>renderMasks(pg.page); renderMasks(pg.page); renderLast(pg); renderAnswer(pg); $('feedback').style.display='none'; renderGrid(); }
+function render(){ applyZoom(); let pg=current(); $('qTitle').textContent=`PDF 第 ${pg.page} 頁`; $('qMeta').textContent=`${pg.typeLabel||'其他頁'}｜本頁 ${pg.exercises?.length||0} 題`; $('pageImg').src=`pages/page-${String(pg.page).padStart(3,'0')}.jpg`; $('pageImg').onload=()=>renderMasks(pg.page); renderMasks(pg.page); renderLast(pg); renderAnswer(pg); restoreAnswers(pg); renderSavedFeedback(pg); renderGrid(); }
 function renderLast(pg){ let s=getState(pg); if(!s.ts){ $('lastState').textContent=pg.exercises?.length?'尚未作答':'本頁不用作答'; return; } let mark=s.correct===true?'✅ 上次答對':s.correct===false?'❌ 上次答錯':'✍️ 已作答／待自評'; $('lastState').textContent=`${mark}｜${new Date(s.ts).toLocaleString()}`; }
 function renderAnswer(pg){ if(!pg.exercises||!pg.exercises.length){ $('pageNotice').innerHTML='本頁題型暫不做互動答題，可只作閱讀。'; $('answerArea').innerHTML=''; return; } $('pageNotice').innerHTML='完成本頁後按「提交本頁」。選擇題及選項式題型會自動判分；簡答／問答等會顯示參考答案，請自行標記掌握程度。'; $('answerArea').innerHTML=pg.exercises.map((ex,ei)=>renderExercise(ex,ei)).join(''); }
 function esc(s){ return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
@@ -164,8 +186,79 @@ function incompleteList(pg){
   return missing;
 }
 
+
+function restoreAnswers(pg){
+  const s=getState(pg);
+  const saved=s.answers || {};
+  (pg.exercises||[]).forEach((ex,ei)=>{
+    const ans=saved[ex.id];
+    if(ans===undefined || ans===null) return;
+    if(ex.type==='choice' && ex.options && ex.options.length){
+      const vals=Array.isArray(ans)?ans.map(String):[String(ans)];
+      document.querySelectorAll(`[data-kind="choice"][data-e="${ei}"]`).forEach(el=>{ el.checked=vals.includes(el.value); });
+      return;
+    }
+    if(isCloze(ex) && typeof ans==='object'){
+      document.querySelectorAll(`[data-kind="cloze"][data-e="${ei}"]`).forEach(el=>{
+        const arr=ans[el.dataset.n] || [];
+        el.value = arr[Number(el.dataset.slot)] || '';
+      });
+      return;
+    }
+    if(isPair(ex) && typeof ans==='object'){
+      document.querySelectorAll(`[data-kind="pair"][data-e="${ei}"]`).forEach(el=>{
+        const arr=ans[el.dataset.n] || [];
+        el.checked = arr.map(String).includes(el.value);
+      });
+      return;
+    }
+    if(isClassify(ex) && typeof ans==='object'){
+      const reverse={};
+      Object.entries(ans).forEach(([cat,opts])=>(opts||[]).forEach(opt=>reverse[opt]=cat));
+      document.querySelectorAll(`[data-kind="classify"][data-e="${ei}"]`).forEach(el=>{ el.value = reverse[el.dataset.opt] || ''; });
+      return;
+    }
+    if(isOrder(ex) && typeof ans==='object'){
+      if(Array.isArray(ans.__order)){
+        document.querySelectorAll(`[data-kind="orderSeq"][data-e="${ei}"]`).forEach(el=>{ el.value = ans.__order[Number(el.dataset.pos)] || ''; });
+      }else{
+        document.querySelectorAll(`[data-kind="orderMap"][data-e="${ei}"]`).forEach(el=>{ el.value = (ans[el.dataset.opt]||[])[0] || ''; });
+      }
+      return;
+    }
+    if((isLookTf(ex) || ex.type==='tf_single') && typeof ans==='object'){
+      document.querySelectorAll(`[data-kind="tfmulti"][data-e="${ei}"]`).forEach(el=>{
+        const arr=ans[el.dataset.opt] || [];
+        el.checked = arr.map(String).includes(el.value);
+      });
+      return;
+    }
+    const t=document.querySelector(`[data-kind="open"][data-e="${ei}"]`);
+    if(t) t.value = String(ans||'');
+  });
+}
+
+function renderSavedFeedback(pg){
+  const s=getState(pg);
+  if(!s.answered){
+    $('feedback').style.display='none';
+    return;
+  }
+  let html='';
+  const wrongs=(s.results||[]).map((r,i)=>r.ok===false?`第 ${i+1} 題`:null).filter(Boolean);
+  if(s.correct===true) html='<b>✅ 這頁上次已答對。</b>';
+  else if(s.correct===false) html=`<b>❌ 這頁上次有錯。</b>${wrongs.length?`<br>錯題：${wrongs.join('、')}`:''}`;
+  else html='<b>✍️ 這頁上次已作答，等待自評。</b>';
+  (pg.exercises||[]).forEach((ex,i)=>{
+    const r=(s.results||[]).find(x=>x.id===ex.id);
+    html+=`<div class="ref"><b>${i+1}. ${ex.id}</b>${r?(r.ok===true?' ✅':r.ok===false?' ❌':''):''}<br><b>參考答案：</b>${esc(ansText(ex))}</div>`;
+  });
+  if(s.correct===null) html+=`<div class="actions"><button onclick="markOpen(true)">本頁我答對了 ✅</button><button onclick="markOpen(false)">本頁我未掌握 ❌</button></div>`;
+  feedback(s.correct===true?'ok':s.correct===false?'bad':'info',html);
+}
+
 function ansText(ex){ if(ex.type==='choice') return (ex.answer||[]).join('、')+(ex.reference?`｜${ex.reference}`:''); if(isLookTf(ex)||ex.type==='tf_single') return ex.reference||'請參考 PDF 原答案'; return ex.reference||'請參考 PDF 原答案'; }
-function submit(){ let pg=current(); if(!pg.exercises?.length){ feedback('info','本頁不用作答。'); return; } let missing=incompleteList(pg); if(missing.length){ feedback('bad',`<b>請先完成本頁所有題目，才可以提交。</b><br>尚未完成：${missing.join('、')}<br><small>完成後再按「提交本頁」，才會顯示參考答案。</small>`); return; } let results=[], anyOpen=false, allAutoCorrect=true, answers={}; pg.exercises.forEach((ex,ei)=>{ let ans=collectExercise(ex,ei); answers[ex.id]=ans; let ok=checkExercise(ex,ans); if(ok===null){ anyOpen=true; results.push({ex,ok:null}); }else{ if(!ok) allAutoCorrect=false; results.push({ex,ok}); } }); let finalCorrect=anyOpen?null:allAutoCorrect; setState(pg,{answered:true,correct:finalCorrect,answers}); let html=''; html+=anyOpen?'<b>已記錄本頁作答。請對照參考答案後自行標記。</b>':(finalCorrect?'<b>✅ 本頁全部答對！</b>':'<b>❌ 本頁有題目未答對。</b>'); results.forEach((r,i)=>{ html+=`<div class="ref"><b>${i+1}. ${r.ex.id}</b>${r.ok===true?' ✅':r.ok===false?' ❌':''}<br><b>參考答案：</b>${esc(ansText(r.ex))}</div>`; }); if(anyOpen) html+=`<div class="actions"><button onclick="markOpen(true)">本頁我答對了 ✅</button><button onclick="markOpen(false)">本頁我未掌握 ❌</button></div>`; feedback(finalCorrect===true?'ok':finalCorrect===false?'bad':'info',html); renderGrid(); renderLast(pg); }
+function submit(){ let pg=current(); if(!pg.exercises?.length){ feedback('info','本頁不用作答。'); return; } let missing=incompleteList(pg); if(missing.length){ feedback('bad',`<b>請先完成本頁所有題目，才可以提交。</b><br>尚未完成：${missing.join('、')}<br><small>完成後再按「提交本頁」，才會顯示參考答案。</small>`); return; } let results=[], anyOpen=false, allAutoCorrect=true, answers={}; pg.exercises.forEach((ex,ei)=>{ let ans=collectExercise(ex,ei); answers[ex.id]=ans; let ok=checkExercise(ex,ans); if(ok===null){ anyOpen=true; results.push({ex,ok:null}); }else{ if(!ok) allAutoCorrect=false; results.push({ex,ok}); } }); let finalCorrect=anyOpen?null:allAutoCorrect; setState(pg,{answered:true,correct:finalCorrect,answers,results:results.map((r,i)=>({id:r.ex.id,ok:r.ok}))}); let html=''; html+=anyOpen?'<b>已記錄本頁作答。請對照參考答案後自行標記。</b>':(finalCorrect?'<b>✅ 本頁全部答對！</b>':'<b>❌ 本頁有題目未答對。</b>'); results.forEach((r,i)=>{ html+=`<div class="ref"><b>${i+1}. ${r.ex.id}</b>${r.ok===true?' ✅':r.ok===false?' ❌':''}<br><b>參考答案：</b>${esc(ansText(r.ex))}</div>`; }); if(anyOpen) html+=`<div class="actions"><button onclick="markOpen(true)">本頁我答對了 ✅</button><button onclick="markOpen(false)">本頁我未掌握 ❌</button></div>`; feedback(finalCorrect===true?'ok':finalCorrect===false?'bad':'info',html); renderGrid(); renderLast(pg); }
 function markOpen(v){ let pg=current(); setState(pg,{correct:v}); feedback(v?'ok':'bad',v?'✅ 已標記本頁答對':'❌ 已加入錯題重溫'); renderGrid(); renderLast(pg); }
 function feedback(cls,html){ let f=$('feedback'); f.className='feedback '+cls; f.innerHTML=html; f.style.display='block'; }
 $('submitBtn').onclick=submit;
@@ -176,7 +269,7 @@ $('btnAll').onclick=()=>{ view='all'; idx=0; render(); };
 $('btnWrong').onclick=()=>{ view='wrong'; idx=0; render(); };
 $('btnUnfinished').onclick=()=>{ view='unfinished'; idx=0; render(); };
 $('btnContinue').onclick=()=>{ let p=load(), id=p.last; view='all'; typeFilter='all'; $('typeFilter').value='all'; let pos=PAGES.findIndex(pg=>pageId(pg)===id); idx=pos>=0?pos:0; render(); };
-$('userSelect').value=user; $('userSelect').onchange=e=>{ user=e.target.value; localStorage.setItem('revision_portal_current_user',user); idx=0; render(); };
+$('userSelect').value=user; $('userSelect').onchange=e=>{ user=canonicalUser(e.target.value); localStorage.setItem('revision_portal_current_user',user); idx=0; render(); };
 $('typeFilter').onchange=e=>{ typeFilter=e.target.value; idx=0; render(); };
 function applyZoom(){ const viewer=$('viewer'); if(!viewer) return; viewer.classList.remove('compact','large','pdfSmall','pdfMedium','pdfLarge'); if(zoomMode==='small') viewer.classList.add('compact'); if(zoomMode==='large') viewer.classList.add('large'); viewer.classList.add(pdfHeightMode==='small'?'pdfSmall':pdfHeightMode==='large'?'pdfLarge':'pdfMedium'); }
 function setZoom(z){ zoomMode=z; localStorage.setItem('brother_p6_gs_b5_u1_zoom',z); applyZoom(); }

@@ -10,13 +10,20 @@ const UNITS = [
   {id:'sciU6Progress', key:'progress_sister_p4_sci_u6_', total:65},
   {id:'sciU7Progress', key:'progress_sister_p4_sci_u7_', total:91}
 ];
-let currentUser = localStorage.getItem(USER_KEY) || 'sister';
+function canonicalUser(u){
+  if(u === 'childA') return 'brother';
+  if(u === 'childB') return 'sister';
+  return (u === 'brother' || u === 'sister') ? u : 'sister';
+}
+let currentUser = canonicalUser(localStorage.getItem(USER_KEY) || 'sister');
+localStorage.setItem(USER_KEY, currentUser);
 function label(user){return (user === 'brother' || user === 'childA') ? '哥哥' : '妹妹'}
 function setUser(user){
+  user = canonicalUser(user);
   currentUser = user;
   localStorage.setItem(USER_KEY, user);
   document.querySelectorAll('[data-user]').forEach(btn=>btn.classList.toggle('active', btn.dataset.user===user));
-  document.querySelectorAll('[data-set-user]').forEach(link=>{ link.onclick = () => localStorage.setItem(USER_KEY, link.dataset.setUser || currentUser); });
+  document.querySelectorAll('[data-set-user]').forEach(link=>{ link.onclick = () => localStorage.setItem(USER_KEY, canonicalUser(link.dataset.setUser || currentUser)); });
   renderProgress();
 }
 function getProgress(unit, user){ try{return JSON.parse(localStorage.getItem(unit.key + user) || '{}')}catch(e){return {}} }
