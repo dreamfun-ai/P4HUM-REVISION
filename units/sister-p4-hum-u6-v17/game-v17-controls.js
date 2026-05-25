@@ -32,7 +32,51 @@ migrateLegacyProgress();
 function pageId(pg){ return 'page_' + pg.page; }
 function getState(pg){ return load()[pageId(pg)] || {}; }
 function setState(pg,s){ let p=load(); p[pageId(pg)]={...(p[pageId(pg)]||{}),...s,ts:new Date().toISOString()}; p.last=pageId(pg); save(p); }
-function normArr(a){ return [...(a||[])].map(String).filter(Boolean).sort().join('|'); }
+
+function canonSymbol(s){
+  s=String(s||'');
+  if(/[✓✔√✅對]/.test(s)) return 'true';
+  if(/[✗✘×❌錯]/.test(s)) return 'false';
+  return s;
+}
+function normVal(v){
+  return canonSymbol(String(v||'')
+    .replace(/\s+/g,'')
+    .replace(/[　]/g,'')
+    .replace(/[。．.]+$/g,'')
+    .replace(/[（）()]/g,'')
+    .trim());
+}
+function prettyRefText(ref){
+  return String(ref||'')
+    .replace(/\[--|--\]/g,'')
+    .replace(/^答案[:：]?/,'')
+    .replace(//g,'✅ 對')
+    .replace(//g,'❌ 錯')
+    .replace(/\s*；\s*/g,'； ')
+    .trim();
+}
+function recalcSavedState(pg){
+  const s=getState(pg);
+  if(!s.answered || !s.answers || !pg.exercises || !pg.exercises.length) return;
+  let anyOpen=false, allAutoCorrect=true, results=[];
+  pg.exercises.forEach((ex)=>{
+    const ans=s.answers[ex.id];
+    const ok=checkExercise(ex, ans);
+    if(ok===null){ anyOpen=true; results.push({id:ex.id, ok:null}); }
+    else { if(!ok) allAutoCorrect=false; results.push({id:ex.id, ok}); }
+  });
+  if(anyOpen){
+    if(JSON.stringify(s.results||[]) !== JSON.stringify(results)) setState(pg,{results});
+  }else{
+    const finalCorrect=allAutoCorrect;
+    if(s.correct!==finalCorrect || JSON.stringify(s.results||[]) !== JSON.stringify(results)){
+      setState(pg,{correct:finalCorrect,results});
+    }
+  }
+}
+
+function normArr(a){ return [...(a||[])].map(normVal).filter(Boolean).sort().join('|'); }
 function activePages(){ return PAGES.filter(p=>p.exercises&&p.exercises.length); }
 function filtered(){ let arr=PAGES.slice(), p=load(); if(view==='wrong') arr=arr.filter(pg=>p[pageId(pg)]?.correct===false); if(view==='unfinished') arr=arr.filter(pg=>pg.exercises?.length&&!p[pageId(pg)]); if(typeFilter!=='all') arr=arr.filter(pg=>pg.typeLabel===typeFilter); return arr.length?arr:PAGES; }
 function currentArray(){ return filtered(); }
@@ -40,7 +84,7 @@ function current(){ let arr=currentArray(); if(idx>=arr.length) idx=0; return ar
 function initTypes(){ let types=['all',...new Set(PAGES.map(p=>p.typeLabel).filter(Boolean))]; $('typeFilter').innerHTML=types.map(t=>`<option value="${t}">${t==='all'?'全部題型':t}</option>`).join(''); }
 function shortType(t){ return (t||'').replace('題','').replace('看圖','圖'); }
 function renderGrid(){ let p=load(), arr=currentArray(), active=activePages(), done=active.filter(pg=>p[pageId(pg)]).length, wrong=active.filter(pg=>p[pageId(pg)]?.correct===false).length; $('stats').innerHTML=`全部 ${PAGES.length} 頁｜需作答 ${active.length} 頁｜已做 ${done} 頁｜錯題 ${wrong} 頁`; $('grid').innerHTML=arr.map((pg,i)=>{ let s=p[pageId(pg)], cls=!pg.exercises?.length?'skip':(s?(s.correct===true?'ok':s.correct===false?'bad':'open'):''), mark=!pg.exercises?.length?'—':(s?(s.correct===true?'✅':s.correct===false?'❌':'✍️'):'⬜'); return `<button class="qcell ${cls} ${i===idx?'active':''}" onclick="idx=${i};render()">${mark}<br>P${pg.page}<br>${shortType(pg.typeLabel)}</button>` }).join(''); }
-function render(){ applyZoom(); let pg=current(); $('qTitle').textContent=`PDF 第 ${pg.page} 頁`; $('qMeta').textContent=`${pg.typeLabel||'其他頁'}｜本頁 ${pg.exercises?.length||0} 題`; $('pageImg').src=`pages/page-${String(pg.page).padStart(3,'0')}.jpg`; $('pageImg').onload=()=>renderMasks(pg.page); renderMasks(pg.page); renderLast(pg); renderAnswer(pg); restoreAnswers(pg); renderSavedFeedback(pg); renderGrid(); }
+function render(){ applyZoom(); let pg=current(); $('qTitle').textContent=`PDF 第 ${pg.page} 頁`; $('qMeta').textContent=`${pg.typeLabel||'其他頁'}｜本頁 ${pg.exercises?.length||0} 題`; $('pageImg').src=`pages/page-${String(pg.page).padStart(3,'0')}.jpg`; $('pageImg').onload=()=>renderMasks(pg.page); renderMasks(pg.page); recalcSavedState(pg); renderLast(pg); renderAnswer(pg); restoreAnswers(pg); renderSavedFeedback(pg); renderGrid(); }
 function renderLast(pg){ let s=getState(pg); if(!s.ts){ $('lastState').textContent=pg.exercises?.length?'尚未作答':'本頁不用作答'; return; } let mark=s.correct===true?'✅ 上次答對':s.correct===false?'❌ 上次答錯':'✍️ 已作答／待自評'; $('lastState').textContent=`${mark}｜${new Date(s.ts).toLocaleString()}`; }
 function renderAnswer(pg){ if(!pg.exercises||!pg.exercises.length){ $('pageNotice').innerHTML='本頁題型暫不做互動答題，可只作閱讀。'; $('answerArea').innerHTML=''; return; } $('pageNotice').innerHTML='完成本頁後按「提交本頁」。選擇題及選項式題型會自動判分；簡答／問答等會顯示參考答案，請自行標記掌握程度。'; $('answerArea').innerHTML=pg.exercises.map((ex,ei)=>renderExercise(ex,ei)).join(''); }
 function esc(s){ return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
@@ -96,7 +140,7 @@ function renderOrder(ex,ei){
   if(optKeys.length){ const max=Math.max(...Object.values(map).flat().map(x=>parseInt(x,10)).filter(Boolean), optKeys.length); return optKeys.map(k=>`<div class="subrow"><b>${k} 是第幾？</b><select data-kind="orderMap" data-e="${ei}" data-opt="${k}"><option value="">請選擇</option>${Array.from({length:max},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}</select></div>`).join(''); }
   const ref=Object.values(map).flat(); const keys=optionKeysFromQuestion(ex.question,ref); const len=ref.length||keys.length; return Array.from({length:len},(_,i)=>`<div class="subrow"><b>第 ${i+1} 位：</b><select data-kind="orderSeq" data-e="${ei}" data-pos="${i}"><option value="">請選擇</option>${keys.map(k=>`<option value="${k}">${k}</option>`).join('')}</select></div>`).join('');
 }
-function tfValFromSymbol(s){ s=String(s||''); if(/[✓✔√對]/.test(s)) return 'true'; if(/[✗✘×錯]/.test(s)) return 'false'; return ''; }
+function tfValFromSymbol(s){ const v=canonSymbol(s); return v==='true'||v==='false'?v:''; }
 function renderLookTf(ex,ei){
   const map=parseRefMap(ex.reference); const keys=Object.keys(map).filter(k=>/^[A-Z]$/.test(k)); const optKeys=keys.length?keys:optionKeysFromQuestion(ex.question,['A','B','C','D']);
   return optKeys.map(k=>`<div class="subrow"><b>${k}：</b><label class="miniChoice"><input type="radio" name="tf_${ei}_${k}" data-kind="tfmulti" data-e="${ei}" data-opt="${k}" value="true">✅ 對</label><label class="miniChoice"><input type="radio" name="tf_${ei}_${k}" data-kind="tfmulti" data-e="${ei}" data-opt="${k}" value="false">❌ 錯</label></div>`).join('');
@@ -126,8 +170,8 @@ function checkExercise(ex,ans){
   if(ex.type==='choice' && ex.options && ex.options.length) return normArr(ans)===normArr(ex.answer||[]);
   if(isCloze(ex)){ const ref=parseRefMap(ex.reference); const keys=Object.keys(ref).filter(k=>/^\d+$/.test(k)); if(!keys.length) return null; return keys.every(k=>normArr((ans&&ans[k])||[])===normArr(ref[k]||[])); }
   if(isPair(ex) || isClassify(ex)){ const ref=parseRefMap(ex.reference); const keys=Object.keys(ref).filter(k=>/^\d+$/.test(k)); if(!keys.length) return null; return keys.every(k=>normArr((ans&&ans[k])||[])===normArr(ref[k]||[])); }
-  if(isOrder(ex)){ const ref=parseRefMap(ex.reference); if(ref.__order) return ((ans&&ans.__order)||[]).join('|')===ref.__order.join('|'); const optKeys=Object.keys(ref).filter(k=>/^[A-Z]$/.test(k)); if(optKeys.length) return optKeys.every(k=>normArr((ans&&ans[k])||[])===normArr(ref[k]||[])); return null; }
-  if(isLookTf(ex) || ex.type==='tf_single'){ const ref=parseRefMap(ex.reference); const keys=Object.keys(ref).filter(k=>/^[A-Z]$/.test(k)); if(!keys.length) return null; return keys.every(k=>((ans&&ans[k]&&ans[k][0])||'')===tfValFromSymbol((ref[k]||[])[0])); }
+  if(isOrder(ex)){ const ref=parseRefMap(ex.reference); if(ref.__order) return normArr((ans&&ans.__order)||[])===normArr(ref.__order||[]); const optKeys=Object.keys(ref).filter(k=>/^[A-Z]$/.test(k)); if(optKeys.length) return optKeys.every(k=>normArr((ans&&ans[k])||[])===normArr(ref[k]||[])); return null; }
+  if(isLookTf(ex) || ex.type==='tf_single'){ const ref=parseRefMap(ex.reference); const keys=Object.keys(ref).filter(k=>/^[A-Z]$/.test(k)); if(!keys.length) return null; return keys.every(k=>normVal((ans&&ans[k]&&ans[k][0])||'')===tfValFromSymbol((ref[k]||[])[0])); }
   return null;
 }
 
@@ -257,7 +301,7 @@ function renderSavedFeedback(pg){
   feedback(s.correct===true?'ok':s.correct===false?'bad':'info',html);
 }
 
-function ansText(ex){ if(ex.type==='choice') return (ex.answer||[]).join('、')+(ex.reference?`｜${ex.reference}`:''); if(isLookTf(ex)||ex.type==='tf_single') return ex.reference||'請參考 PDF 原答案'; return ex.reference||'請參考 PDF 原答案'; }
+function ansText(ex){ if(ex.type==='choice') return (ex.answer||[]).join('、')+(ex.reference?`｜${prettyRefText(ex.reference)}`:''); return prettyRefText(ex.reference)||'請參考 PDF 原答案'; }
 function submit(){ let pg=current(); if(!pg.exercises?.length){ feedback('info','本頁不用作答。'); return; } let missing=incompleteList(pg); if(missing.length){ feedback('bad',`<b>請先完成本頁所有題目，才可以提交。</b><br>尚未完成：${missing.join('、')}<br><small>完成後再按「提交本頁」，才會顯示參考答案。</small>`); return; } let results=[], anyOpen=false, allAutoCorrect=true, answers={}; pg.exercises.forEach((ex,ei)=>{ let ans=collectExercise(ex,ei); answers[ex.id]=ans; let ok=checkExercise(ex,ans); if(ok===null){ anyOpen=true; results.push({ex,ok:null}); }else{ if(!ok) allAutoCorrect=false; results.push({ex,ok}); } }); let finalCorrect=anyOpen?null:allAutoCorrect; setState(pg,{answered:true,correct:finalCorrect,answers,results:results.map((r,i)=>({id:r.ex.id,ok:r.ok}))}); let html=''; html+=anyOpen?'<b>已記錄本頁作答。請對照參考答案後自行標記。</b>':(finalCorrect?'<b>✅ 本頁全部答對！</b>':'<b>❌ 本頁有題目未答對。</b>'); results.forEach((r,i)=>{ html+=`<div class="ref"><b>${i+1}. ${r.ex.id}</b>${r.ok===true?' ✅':r.ok===false?' ❌':''}<br><b>參考答案：</b>${esc(ansText(r.ex))}</div>`; }); if(anyOpen) html+=`<div class="actions"><button onclick="markOpen(true)">本頁我答對了 ✅</button><button onclick="markOpen(false)">本頁我未掌握 ❌</button></div>`; feedback(finalCorrect===true?'ok':finalCorrect===false?'bad':'info',html); renderGrid(); renderLast(pg); }
 function markOpen(v){ let pg=current(); setState(pg,{correct:v}); feedback(v?'ok':'bad',v?'✅ 已標記本頁答對':'❌ 已加入錯題重溫'); renderGrid(); renderLast(pg); }
 function feedback(cls,html){ let f=$('feedback'); f.className='feedback '+cls; f.innerHTML=html; f.style.display='block'; }
