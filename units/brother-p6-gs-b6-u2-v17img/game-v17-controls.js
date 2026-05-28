@@ -40,12 +40,9 @@ function canonSymbol(s){
   return s;
 }
 function normVal(v){
-  return canonSymbol(String(v||'')
-    .replace(/\s+/g,'')
-    .replace(/[　]/g,'')
-    .replace(/[。．.]+$/g,'')
-    .replace(/[（）()]/g,'')
-    .trim());
+  const raw=String(v||'').replace(/\s+/g,'').replace(/[　]/g,'').replace(/[。．.]+$/g,'').replace(/[（）()]/g,'').trim();
+  if(isNoMatchToken(raw)) return 'X';
+  return canonSymbol(raw);
 }
 function prettyRefText(ref){
   return String(ref||'')
@@ -124,14 +121,40 @@ function renderCloze(ex,ei){
   if(!keys.length) return `<textarea class="openAns" data-kind="open" data-e="${ei}" placeholder="在這裏輸入答案。提交後會顯示參考答案，自行核對。"></textarea>`;
   return keys.map(n=>{ const slots=Math.max(1,(map[n]||[]).length); const selects=Array.from({length:slots},(_,j)=>`<select data-kind="cloze" data-e="${ei}" data-n="${n}" data-slot="${j}"><option value="">請選擇</option>${bank.map(w=>`<option value="${esc(w)}">${esc(w)}</option>`).join('')}</select>`).join(' '); return `<div class="subrow"><b>第 ${n} 題／空：</b>${selects}</div>`; }).join('');
 }
+
+function isNoMatchToken(v){
+  const s=String(v||'').replace(/\s+/g,'').trim();
+  return /^(X|x|×|✗|✘|❌|無|沒有|不適用|不配對|沒有答案|NA|N\/A)$/.test(s) || /[]/.test(s);
+}
+function addNoMatchOption(keys, map){
+  const arr=[...new Set(keys||[])];
+  const vals=Object.values(map||{}).flat();
+  if(vals.some(isNoMatchToken) && !arr.includes('X')) arr.push('X');
+  return arr;
+}
+function optionLabel(k){
+  return k === 'X' ? 'X／沒有配對' : k;
+}
+
 function renderPair(ex,ei){
-  const map=parseRefMap(ex.reference); const nKeys=Object.keys(map).filter(k=>/^\d+$/.test(k)); const optKeys=optionKeysFromQuestion(ex.question, [...new Set(Object.values(map).flat())].filter(x=>/^[A-Z]$/.test(x)));
-  return nKeys.map(n=>{ const multi=(map[n]||[]).length>1; const input=multi?'checkbox':'radio'; return `<div class="subrow"><b>${n}：</b>${optKeys.map(k=>`<label class="miniChoice"><input type="${input}" name="pair_${ei}_${n}" data-kind="pair" data-e="${ei}" data-n="${n}" value="${k}">${k}</label>`).join('')}</div>`; }).join('');
+  const map=parseRefMap(ex.reference);
+  const nKeys=Object.keys(map).filter(k=>/^\d+$/.test(k));
+  const baseKeys=optionKeysFromQuestion(ex.question, [...new Set(Object.values(map).flat())].filter(x=>/^[A-Z]$/.test(x)));
+  const optKeys=addNoMatchOption(baseKeys, map);
+  return nKeys.map(n=>{
+    const multi=(map[n]||[]).filter(v=>!isNoMatchToken(v)).length>1;
+    const input=multi?'checkbox':'radio';
+    return `<div class="subrow"><b>${n}：</b>${optKeys.map(k=>`<label class="miniChoice"><input type="${input}" name="pair_${ei}_${n}" data-kind="pair" data-e="${ei}" data-n="${n}" value="${k}">${optionLabel(k)}</label>`).join('')}</div>`;
+  }).join('');
 }
 function renderClassify(ex,ei){
-  const map=parseRefMap(ex.reference); const catKeys=Object.keys(map).filter(k=>/^\d+$/.test(k)); const optKeys=optionKeysFromQuestion(ex.question, [...new Set(Object.values(map).flat())].filter(x=>/^[A-Z]$/.test(x)));
+  const map=parseRefMap(ex.reference);
+  let catKeys=Object.keys(map).filter(k=>/^\d+$/.test(k));
+  const baseKeys=optionKeysFromQuestion(ex.question, [...new Set(Object.values(map).flat())].filter(x=>/^[A-Z]$/.test(x)));
+  const optKeys=baseKeys;
+  if(Object.values(map).flat().some(isNoMatchToken) && !catKeys.includes('X')) catKeys=[...catKeys,'X'];
   if(!catKeys.length) return renderPair(ex,ei);
-  return optKeys.map(k=>`<div class="subrow"><b>${k} 分到：</b><select data-kind="classify" data-e="${ei}" data-opt="${k}"><option value="">請選擇分類</option>${catKeys.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>`).join('');
+  return optKeys.map(k=>`<div class="subrow"><b>${k} 分到：</b><select data-kind="classify" data-e="${ei}" data-opt="${k}"><option value="">請選擇分類</option>${catKeys.map(c=>`<option value="${c}">${c==='X'?'X／不屬於以上分類':c}</option>`).join('')}</select></div>`).join('');
 }
 function renderOrder(ex,ei){
   const map=parseRefMap(ex.reference);
